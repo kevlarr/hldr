@@ -1,8 +1,6 @@
-pub mod error;
 mod parser;
 
 use super::lex::Token;
-pub use error::{ParseError, ParseErrorKind};
 use parser::Parser;
 
 #[derive(Debug, PartialEq)]
@@ -63,30 +61,33 @@ impl Schema {
     }
 }
 
-pub fn parse(tokens: Vec<Token>) -> Result<Vec<Schema>, ParseError> {
-    Ok(Parser::new().parse(tokens)?.schemas)
+pub fn parse(tokens: Vec<Token>) -> Vec<Schema> {
+    Parser::new().parse(tokens).schemas
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Token as T, *};
+    use super::{*, Token as T};
 
     #[test]
     fn empty() {
-        assert_eq!(parse(vec![]), Ok(vec![]));
+        assert_eq!(parse(vec![]), vec![]);
     }
 
     #[test]
     fn schema() {
-        let tokens = vec![T::Newline, T::Identifier("public".to_owned())];
+        let tokens = vec![
+            T::Newline,
+            T::Identifier("public".to_owned()),
+        ];
 
-        assert_eq!(
-            parse(tokens),
-            Ok(vec![Schema {
+        assert_eq!(parse(tokens), vec![
+
+            Schema {
                 name: "public".to_owned(),
                 tables: Vec::new(),
-            },])
-        );
+            },
+        ]);
     }
 
     #[test]
@@ -99,19 +100,16 @@ mod tests {
             T::Newline,
         ];
 
-        assert_eq!(
-            parse(tokens),
-            Ok(vec![
-                Schema {
-                    name: "schema1".to_owned(),
-                    tables: Vec::new(),
-                },
-                Schema {
-                    name: "schema2".to_owned(),
-                    tables: Vec::new(),
-                },
-            ])
-        );
+        assert_eq!(parse(tokens), vec![
+            Schema {
+                name: "schema1".to_owned(),
+                tables: Vec::new(),
+            },
+            Schema {
+                name: "schema2".to_owned(),
+                tables: Vec::new(),
+            },
+        ]);
 
         let tokens = vec![
             T::Newline,
@@ -121,35 +119,27 @@ mod tests {
             T::Identifier("schema2".to_owned()),
         ];
 
-        assert_eq!(
-            parse(tokens),
-            Ok(vec![
-                Schema {
-                    name: "schema1".to_owned(),
-                    tables: Vec::new(),
-                },
-                Schema {
-                    name: "schema2".to_owned(),
-                    tables: Vec::new(),
-                },
-            ])
-        );
+        assert_eq!(parse(tokens), vec![
+            Schema {
+                name: "schema1".to_owned(),
+                tables: Vec::new(),
+            },
+            Schema {
+                name: "schema2".to_owned(),
+                tables: Vec::new(),
+            },
+        ]);
     }
 
     #[test]
+    #[should_panic(expected = "Unexpected token")]
     fn schemas_without_newlines() {
         let tokens = vec![
             T::Identifier("schema1".to_owned()),
             T::Identifier("schema2".to_owned()),
         ];
 
-        assert_eq!(
-            parse(tokens),
-            Err(ParseError::unexpected_token(
-                1,
-                T::Identifier("schema2".to_owned())
-            ))
-        );
+        parse(tokens);
     }
 
     #[test]
@@ -161,16 +151,17 @@ mod tests {
             T::Identifier("my_table".to_owned()),
         ];
 
-        assert_eq!(
-            parse(tokens),
-            Ok(vec![Schema {
+        assert_eq!(parse(tokens), vec![
+            Schema {
                 name: "public".to_owned(),
-                tables: vec![Table {
-                    name: "my_table".to_owned(),
-                    records: Vec::new(),
-                }],
-            },])
-        );
+                tables: vec![
+                    Table {
+                        name: "my_table".to_owned(),
+                        records: Vec::new(),
+                    }
+                ],
+            },
+        ]);
     }
 
     #[test]
@@ -185,9 +176,8 @@ mod tests {
             T::Identifier("table2".to_owned()),
         ];
 
-        assert_eq!(
-            parse(tokens),
-            Ok(vec![Schema {
+        assert_eq!(parse(tokens), vec![
+            Schema {
                 name: "public".to_owned(),
                 tables: vec![
                     Table {
@@ -199,8 +189,8 @@ mod tests {
                         records: Vec::new(),
                     },
                 ],
-            },])
-        );
+            },
+        ]);
     }
 
     #[test]
@@ -215,9 +205,8 @@ mod tests {
             T::QuotedIdentifier("another table".to_owned()),
         ];
 
-        assert_eq!(
-            parse(tokens),
-            Ok(vec![Schema {
+        assert_eq!(parse(tokens), vec![
+            Schema {
                 name: "public schema".to_owned(),
                 tables: vec![
                     Table {
@@ -229,12 +218,24 @@ mod tests {
                         records: Vec::new(),
                     },
                 ],
-            },])
-        );
+            },
+        ]);
     }
 
     #[test]
+    #[should_panic(expected = "Unexpected token")]
     fn tables_without_newlines() {
+        let tokens = vec![
+            T::Identifier("schema1".to_owned()),
+            T::Newline,
+            T::Indent("    ".to_owned()),
+            T::Identifier("table1".to_owned()),
+            T::Indent("    ".to_owned()),
+            T::Identifier("table2".to_owned()),
+        ];
+
+        parse(tokens);
+
         let tokens = vec![
             T::Identifier("schema1".to_owned()),
             T::Newline,
@@ -243,13 +244,16 @@ mod tests {
             T::Identifier("table2".to_owned()),
         ];
 
-        assert_eq!(
-            parse(tokens),
-            Err(ParseError::unexpected_token(
-                2,
-                T::Identifier("table2".to_owned())
-            ))
-        );
+        parse(tokens);
+
+        let tokens = vec![
+            T::Identifier("schema1".to_owned()),
+            T::Indent("    ".to_owned()),
+            T::Identifier("table1".to_owned()),
+            T::Identifier("table2".to_owned()),
+        ];
+
+        parse(tokens);
     }
 
     #[test]
@@ -264,19 +268,22 @@ mod tests {
             T::Identifier("kevin".to_owned()),
         ];
 
-        assert_eq!(
-            parse(tokens),
-            Ok(vec![Schema {
+        assert_eq!(parse(tokens), vec![
+            Schema {
                 name: "public".to_owned(),
-                tables: vec![Table {
-                    name: "person".to_owned(),
-                    records: vec![Record {
-                        name: Some("kevin".to_owned()),
-                        attributes: Vec::new(),
-                    }]
-                }],
-            },])
-        );
+                tables: vec![
+                    Table {
+                        name: "person".to_owned(),
+                        records: vec![
+                            Record {
+                                name: Some("kevin".to_owned()),
+                                attributes: Vec::new(),
+                            }
+                        ]
+                    }
+                ],
+            },
+        ]);
     }
 
     #[test]
@@ -303,9 +310,8 @@ mod tests {
             T::Identifier("cupid".to_owned()),
         ];
 
-        assert_eq!(
-            parse(tokens),
-            Ok(vec![Schema {
+        assert_eq!(parse(tokens), vec![
+            Schema {
                 name: "public".to_owned(),
                 tables: vec![
                     Table {
@@ -335,8 +341,8 @@ mod tests {
                         ]
                     },
                 ],
-            },])
-        );
+            },
+        ]);
     }
 
     #[test]
@@ -351,19 +357,22 @@ mod tests {
             T::Underscore,
         ];
 
-        assert_eq!(
-            parse(tokens),
-            Ok(vec![Schema {
+        assert_eq!(parse(tokens), vec![
+            Schema {
                 name: "public".to_owned(),
-                tables: vec![Table {
-                    name: "person".to_owned(),
-                    records: vec![Record {
-                        name: None,
-                        attributes: Vec::new(),
-                    }]
-                }],
-            },])
-        );
+                tables: vec![
+                    Table {
+                        name: "person".to_owned(),
+                        records: vec![
+                            Record {
+                                name: None,
+                                attributes: Vec::new(),
+                            }
+                        ]
+                    }
+                ],
+            },
+        ]);
     }
 
     #[test]
@@ -390,9 +399,8 @@ mod tests {
             T::Underscore,
         ];
 
-        assert_eq!(
-            parse(tokens),
-            Ok(vec![Schema {
+        assert_eq!(parse(tokens), vec![
+            Schema {
                 name: "public".to_owned(),
                 tables: vec![
                     Table {
@@ -422,8 +430,8 @@ mod tests {
                         ]
                     },
                 ],
-            },])
-        );
+            },
+        ]);
     }
 
     #[test]
@@ -450,9 +458,8 @@ mod tests {
             T::Identifier("eiyre".to_owned()),
         ];
 
-        assert_eq!(
-            parse(tokens),
-            Ok(vec![Schema {
+        assert_eq!(parse(tokens), vec![
+            Schema {
                 name: "public".to_owned(),
                 tables: vec![
                     Table {
@@ -482,11 +489,12 @@ mod tests {
                         ]
                     },
                 ],
-            },])
-        );
+            },
+        ]);
     }
 
     #[test]
+    #[should_panic(expected = "Unexpected token")]
     fn invalid_records() {
         let tokens = vec![
             T::Identifier("schema1".to_owned()),
@@ -499,13 +507,7 @@ mod tests {
             T::Identifier("another_identifier".to_owned()),
         ];
 
-        assert_eq!(
-            parse(tokens),
-            Err(ParseError::unexpected_token(
-                3,
-                T::Identifier("another_identifier".to_owned())
-            ))
-        );
+        parse(tokens);
     }
 
     #[test]
@@ -524,22 +526,27 @@ mod tests {
             T::Text("Kevin".to_owned()),
         ];
 
-        assert_eq!(
-            parse(tokens),
-            Ok(vec![Schema {
+        assert_eq!(parse(tokens), vec![
+            Schema {
                 name: "public".to_owned(),
-                tables: vec![Table {
-                    name: "person".to_owned(),
-                    records: vec![Record {
-                        name: Some("kevin".to_owned()),
-                        attributes: vec![Attribute {
-                            name: "name".to_owned(),
-                            value: Value::Text("Kevin".to_owned()),
-                        }]
-                    }]
-                }]
-            },])
-        );
+                tables: vec![
+                    Table {
+                        name: "person".to_owned(),
+                        records: vec![
+                            Record {
+                                name: Some("kevin".to_owned()),
+                                attributes: vec![
+                                    Attribute {
+                                        name: "name".to_owned(),
+                                        value: Value::Text("Kevin".to_owned()),
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]);
     }
 
     #[test]
@@ -585,12 +592,11 @@ mod tests {
             T::Boolean(true),
         ];
 
-        assert_eq!(
-            parse(tokens),
-            Ok(vec![
-                Schema {
-                    name: "public".to_owned(),
-                    tables: vec![Table {
+        assert_eq!(parse(tokens), vec![
+            Schema {
+                name: "public".to_owned(),
+                tables: vec![
+                    Table {
                         name: "person".to_owned(),
                         records: vec![
                             Record {
@@ -620,26 +626,33 @@ mod tests {
                                 ],
                             },
                         ],
-                    },],
-                },
-                Schema {
-                    name: "private_schema".to_owned(),
-                    tables: vec![Table {
+                    },
+                ],
+            },
+            Schema {
+                name: "private_schema".to_owned(),
+                tables: vec![
+                    Table {
                         name: "pet".to_owned(),
-                        records: vec![Record {
-                            name: Some("cupid".to_owned()),
-                            attributes: vec![Attribute {
-                                name: "loves_belly_scratches".to_owned(),
-                                value: Value::Boolean(true),
-                            },],
-                        },],
-                    },],
-                }
-            ])
-        );
+                        records: vec![
+                            Record {
+                                name: Some("cupid".to_owned()),
+                                attributes: vec![
+                                    Attribute {
+                                        name: "loves_belly_scratches".to_owned(),
+                                        value: Value::Boolean(true),
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            }
+        ]);
     }
 
     #[test]
+    #[should_panic(expected = "Unexpected token")]
     fn expecting_attribute_wrong_token() {
         let tokens = vec![
             T::Identifier("public".to_owned()),
@@ -654,13 +667,11 @@ mod tests {
             T::Boolean(false),
         ];
 
-        assert_eq!(
-            parse(tokens),
-            Err(ParseError::unexpected_token(4, T::Boolean(false)))
-        );
+        parse(tokens);
     }
 
     #[test]
+    #[should_panic(expected = "Expected value for attribute")]
     fn attribute_without_value() {
         let tokens = vec![
             T::Identifier("public".to_owned()),
@@ -675,10 +686,11 @@ mod tests {
             T::Identifier("name".to_owned()),
         ];
 
-        assert_eq!(parse(tokens), Err(ParseError::missing_column_value(4)));
+        parse(tokens);
     }
 
     #[test]
+    #[should_panic(expected = "Expected value for attribute")]
     fn attribute_without_value_newline() {
         let tokens = vec![
             T::Identifier("public".to_owned()),
@@ -694,10 +706,11 @@ mod tests {
             T::Newline,
         ];
 
-        assert_eq!(parse(tokens), Err(ParseError::missing_column_value(4)));
+        parse(tokens);
     }
 
     #[test]
+    #[should_panic(expected = "Unexpected token")]
     fn attribute_with_extra_identifier() {
         let tokens = vec![
             T::Identifier("public".to_owned()),
@@ -714,92 +727,6 @@ mod tests {
             T::Identifier("name".to_owned()),
         ];
 
-        assert_eq!(
-            parse(tokens),
-            Err(ParseError::unexpected_token(
-                4,
-                T::Identifier("name".to_owned())
-            ))
-        );
-    }
-
-    #[test]
-    fn first_line_indented() {
-        let tokens = vec![
-            T::Indent("\t".to_owned()),
-            T::Identifier("identifier".to_owned()),
-            T::Newline,
-        ];
-
-        assert_eq!(parse(tokens), Err(ParseError::missing_schema(1)));
-
-        let tokens = vec![
-            T::Indent("\t\t\t".to_owned()),
-            T::Identifier("identifier".to_owned()),
-            T::Newline,
-        ];
-
-        assert_eq!(parse(tokens), Err(ParseError::missing_schema(1)));
-    }
-
-    #[test]
-    fn inconsistent_indent() {
-        let tokens = vec![
-            T::Identifier("schema".to_owned()),
-            T::Newline,
-            T::Indent("\t\t".to_owned()),
-            T::Identifier("identifier".to_owned()),
-            T::Newline,
-            T::Indent("\t".to_owned()),
-            T::Identifier("identifier".to_owned()),
-            T::Newline,
-        ];
-
-        assert_eq!(
-            parse(tokens),
-            Err(ParseError::inconsistent_indent(
-                3,
-                "\t\t".to_owned(),
-                "\t".to_owned()
-            ))
-        );
-    }
-
-    #[test]
-    fn missing_table() {
-        // For a record to be detected in a schema *without* a table present,
-        // there needs to have already been an indentation unit set by a table
-        // in a previous schema. Otherwise, the indentation prior to the record's
-        // identifier will be set as the indentation unit and, being at indentation
-        // level 1, the identifer will be parsed as a table name.
-        let tokens = vec![
-            T::Identifier("schema1".to_owned()),
-            T::Newline,
-            T::Indent("\t".to_owned()),
-            T::Identifier("table1".to_owned()),
-            T::Newline,
-            T::Identifier("schema2".to_owned()),
-            T::Newline,
-            T::Indent("\t\t".to_owned()),
-            T::Underscore,
-        ];
-
-        assert_eq!(parse(tokens), Err(ParseError::missing_table(4)));
-    }
-
-    #[test]
-    fn missing_record() {
-        let tokens = vec![
-            T::Identifier("schema".to_owned()),
-            T::Newline,
-            T::Indent("\t".to_owned()),
-            T::Identifier("table".to_owned()),
-            T::Newline,
-            T::Indent("\t\t\t".to_owned()),
-            T::Identifier("name".to_owned()),
-            T::Text("anonymous".to_owned()),
-        ];
-
-        assert_eq!(parse(tokens), Err(ParseError::missing_record(3)));
+        parse(tokens);
     }
 }

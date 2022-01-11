@@ -1,16 +1,4 @@
-use super::error::{LexError, Position};
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum Token {
-    Boolean(bool),
-    Identifier(String),
-    Indent(String),
-    Newline,
-    Number(String),
-    QuotedIdentifier(String),
-    Text(String),
-    Underscore,
-}
+use super::Token;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum State {
@@ -44,18 +32,21 @@ impl Tokenizer {
         }
     }
 
-    pub fn tokenize(mut self, input: &str) -> Result<Self, LexError> {
-        let mut position = Position { line: 0, column: 0 };
-
-        for line in input.lines() {
+    pub fn tokenize(mut self, input: &str) -> Self {
+        for (line_num, line) in input.lines().enumerate() {
             self.state = State::LineStart;
-            position.line += 1;
-            position.column = 0;
 
-            for c in line.chars() {
-                position.column += 1;
+            let mut last_char_num = 0;
 
-                let unexpected = || Err(LexError::unexpected_character(position, c));
+            for (char_num, c) in line.chars().enumerate() {
+                last_char_num = char_num;
+                
+                let unexpected = || panic!(
+                    "Unexpected character '{}' (line {}, column {})",
+                    c,
+                    line_num + 1,
+                    char_num + 1,
+                );
 
                 self.state = match self.state {
                     State::Comment => State::Comment,
@@ -70,13 +61,15 @@ impl Tokenizer {
                             self.tokens.push(Token::Number(num));
                             State::Whitespace
                         }
-                        _ => return unexpected(),
-                    },
+                        _ => unexpected(),
+                    }
 
                     State::ExpectingComment => match c {
-                        '-' => State::Comment,
-                        _ => return unexpected(),
-                    },
+                        '-' => {
+                            State::Comment
+                        }
+                        _ => unexpected(),
+                    }
 
                     State::Identifier => match c {
                         c if valid_identifier_char(c) => {
@@ -88,8 +81,8 @@ impl Tokenizer {
                             self.tokens.push(identifier_to_token(ident));
                             State::Whitespace
                         }
-                        _ => return unexpected(),
-                    },
+                        _ => unexpected(),
+                    }
 
                     State::Indent => match c {
                         ' ' | '\t' => {
@@ -101,9 +94,15 @@ impl Tokenizer {
                             self.tokens.push(Token::Indent(indent));
 
                             match c {
-                                '"' => State::QuotedIdentifierOpen,
-                                '\'' => State::TextOpen,
-                                '-' => State::ExpectingComment,
+                                '"' => {
+                                    State::QuotedIdentifierOpen
+                                }
+                                '\'' => {
+                                    State::TextOpen
+                                }
+                                '-' => {
+                                    State::ExpectingComment
+                                }
                                 '0'..='9' => {
                                     self.stack.push(c);
                                     State::Integer
@@ -116,10 +115,10 @@ impl Tokenizer {
                                     self.stack.push(c);
                                     State::Identifier
                                 }
-                                _ => return unexpected(),
+                                _ => unexpected(),
                             }
                         }
-                    },
+                    }
 
                     State::Integer => match c {
                         '0'..='9' => {
@@ -135,13 +134,19 @@ impl Tokenizer {
                             self.tokens.push(Token::Number(num));
                             State::Whitespace
                         }
-                        _ => return unexpected(),
-                    },
+                        _ => unexpected(),
+                    }
 
                     State::LineStart => match c {
-                        '"' => State::QuotedIdentifierOpen,
-                        '\'' => State::TextOpen,
-                        '-' => State::ExpectingComment,
+                        '"' => {
+                            State::QuotedIdentifierOpen
+                        }
+                        '\'' => {
+                            State::TextOpen
+                        }
+                        '-' => {
+                            State::ExpectingComment
+                        }
                         ' ' | '\t' => {
                             self.stack.push(c);
                             State::Indent
@@ -158,16 +163,18 @@ impl Tokenizer {
                             self.stack.push(c);
                             State::Identifier
                         }
-                        _ => return unexpected(),
-                    },
+                        _ => unexpected(),
+                    }
 
                     State::QuotedIdentifierOpen => match c {
-                        '"' => State::QuotedIdentifierClosed,
+                        '"' => {
+                            State::QuotedIdentifierClosed
+                        }
                         _ => {
                             self.stack.push(c);
                             State::QuotedIdentifierOpen
                         }
-                    },
+                    }
 
                     State::QuotedIdentifierClosed => match c {
                         '"' => {
@@ -179,16 +186,18 @@ impl Tokenizer {
                             self.tokens.push(Token::QuotedIdentifier(text));
                             State::Whitespace
                         }
-                        _ => return unexpected(),
-                    },
+                        _ => unexpected()
+                    }
 
                     State::TextOpen => match c {
-                        '\'' => State::TextClosed,
+                        '\'' => {
+                            State::TextClosed
+                        }
                         _ => {
                             self.stack.push(c);
                             State::TextOpen
                         }
-                    },
+                    }
 
                     State::TextClosed => match c {
                         '\'' => {
@@ -200,14 +209,22 @@ impl Tokenizer {
                             self.tokens.push(Token::Text(text));
                             State::Whitespace
                         }
-                        _ => return unexpected(),
-                    },
+                        _ => unexpected()
+                    }
 
                     State::Whitespace => match c {
-                        ' ' | '\t' => State::Whitespace,
-                        '"' => State::QuotedIdentifierOpen,
-                        '\'' => State::TextOpen,
-                        '-' => State::ExpectingComment,
+                        ' ' | '\t' => {
+                            State::Whitespace
+                        }
+                        '"' => {
+                            State::QuotedIdentifierOpen
+                        }
+                        '\'' => {
+                            State::TextOpen
+                        }
+                        '-' => {
+                            State::ExpectingComment
+                        }
                         '0'..='9' => {
                             self.stack.push(c);
                             State::Integer
@@ -220,9 +237,10 @@ impl Tokenizer {
                             self.stack.push(c);
                             State::Identifier
                         }
-                        _ => return unexpected(),
-                    },
+                        _ => unexpected(),
+                    }
                 }
+
             }
 
             match self.state {
@@ -239,17 +257,29 @@ impl Tokenizer {
                     self.tokens.push(Token::Number(num));
                 }
                 State::ExpectingComment => {
-                    return Err(LexError::expected_comment(position));
+                    panic!(
+                        "Expected comment (line {}, column {})",
+                        line_num + 1,
+                        last_char_num + 1,
+                    );
                 }
                 State::QuotedIdentifierOpen => {
-                    return Err(LexError::unclosed_quoted_identifier(position));
+                    panic!(
+                        "Quoted identifier not closed (line {}, column {})",
+                        line_num + 1,
+                        last_char_num + 1,
+                    )
                 }
                 State::QuotedIdentifierClosed => {
                     let text: String = self.stack.drain(..).collect();
                     self.tokens.push(Token::QuotedIdentifier(text));
                 }
                 State::TextOpen => {
-                    return Err(LexError::unclosed_string(position));
+                    panic!(
+                        "String not closed (line {}, column {})",
+                        line_num + 1,
+                        last_char_num + 1,
+                    )
                 }
                 State::TextClosed => {
                     let text: String = self.stack.drain(..).collect();
@@ -261,26 +291,27 @@ impl Tokenizer {
             self.tokens.push(Token::Newline);
         }
 
-        Ok(self)
+        self
     }
 }
 
 fn identifier_to_token(s: String) -> Token {
     match s.as_ref() {
         "_" => Token::Underscore,
-        "true" | "t" => Token::Boolean(true),
+        "true"  | "t" => Token::Boolean(true),
         "false" | "f" => Token::Boolean(false),
         _ => Token::Identifier(s),
     }
 }
 
 fn valid_identifier_char(c: char) -> bool {
-    c == '_'
-        || (
-            // "alphabetic" isn't enough because that precludes other unicode chars
-            // that are valid in postgres identifiers
-            !c.is_control() && !c.is_whitespace() && !c.is_ascii_punctuation()
-        )
+    c == '_' || (
+        // "alphabetic" isn't enough because that precludes other unicode chars
+        // that are valid in postgres identifiers
+        !c.is_control() &&
+        !c.is_whitespace() &&
+        !c.is_ascii_punctuation()
+    )
 }
 
 #[cfg(test)]
@@ -289,15 +320,13 @@ mod tests {
     fn identifier_tokens() {
         use super::{identifier_to_token, Token as T};
 
-        let assert = |s: &str, token: T| {
-            assert_eq!(
-                identifier_to_token(s.to_owned()),
-                token,
-                "{} - {:?}",
-                s,
-                token,
-            )
-        };
+        let assert = |s: &str, token: T| assert_eq!(
+            identifier_to_token(s.to_owned()),
+            token,
+            "{} - {:?}",
+            s,
+            token,
+        );
 
         assert("_", T::Underscore);
 
@@ -310,7 +339,9 @@ mod tests {
         }
 
         for x in [
-            "T", "True", "TRUE", "F", "False", "FALSE", "anything", "else",
+            "T", "True", "TRUE",
+            "F", "False", "FALSE",
+            "anything", "else",
         ] {
             assert(x, T::Identifier(x.to_owned()));
         }
@@ -339,8 +370,10 @@ mod tests {
         use super::valid_identifier_char as valid;
 
         for c in [
-            '`', '~', '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '-', '=', '+', '[', '{',
-            ']', '}', '\\', '|', ';', ':', '\'', '"', ',', '<', '.', '>', '/', '?',
+            '`', '~', '!', '@', '#', '$', '%', '^', '&', '*',
+            '(', ')', '-', '=', '+', '[', '{', ']', '}', '\\',
+            '|', ';', ':', '\'', '"', ',', '<', '.', '>', '/',
+            '?',
         ] {
             assert!(!valid(c), "{}", c);
         }

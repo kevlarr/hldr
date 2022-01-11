@@ -1,4 +1,11 @@
-use super::{error::ParseError, Attribute, Record, Schema, Table, Token, Value};
+use super::{
+    Attribute,
+    Record,
+    Schema,
+    Table,
+    Token,
+    Value,
+};
 
 #[derive(Debug, PartialEq)]
 pub enum State {
@@ -29,122 +36,96 @@ impl Parser {
         }
     }
 
-    pub fn parse(mut self, tokens: Vec<Token>) -> Result<Self, ParseError> {
+    pub fn parse(mut self, tokens: Vec<Token>) -> Self {
         use State::*;
-
-        let mut line = 1;
 
         for token in tokens {
             self.state = match self.state {
+
                 LineStart => match token {
                     Token::Newline => {
-                        line += 1;
                         LineStart
                     }
                     Token::Indent(indent) => {
-                        if indent.is_empty() {
-                            return Err(ParseError::empty_indent(line));
+                        if indent.len() == 0 {
+                            panic!("Empty indent received");
                         }
 
-                        if !indent.trim().is_empty() {
-                            return Err(ParseError::invalid_indent(line, indent));
+                        if indent.trim().len() > 0 {
+                            panic!("Non-whitespace indent received");
                         }
 
-                        let unit = match &self.indent_unit {
-                            Some(u) => u,
-                            None => {
-                                self.indent_unit = Some(indent.clone());
-                                self.indent_unit.as_ref().unwrap()
-                            }
-                        };
+                        if let None = &self.indent_unit {
+                            self.indent_unit = Some(indent.clone());
+                        }
 
-                        match indent_level(unit, &indent) {
+                        match indent_level(self.indent_unit.as_ref().unwrap(), &indent) {
                             Some(level) => match level {
                                 1 => ExpectingTable,
                                 2 => ExpectingRecord,
                                 3 => ExpectingColumn,
-                                n => return Err(ParseError::unexpected_indent_level(line, n)),
-                            },
-                            None => {
-                                return Err(ParseError::inconsistent_indent(
-                                    line,
-                                    unit.clone(),
-                                    indent,
-                                ))
+                                _ => panic!("Unexpected indentation level")
                             }
+                            None => panic!("Inconsistent indent")
                         }
                     }
                     Token::Identifier(ident) | Token::QuotedIdentifier(ident) => {
                         self.schemas.push(Schema::new(ident));
                         CreatedSchema
                     }
-                    _ => return Err(ParseError::unexpected_token(line, token)),
-                },
+                    _ => panic!("Unexpected token {:?}", token)
+                }
+
                 CreatedSchema | CreatedTable | CreatedRecord | CreatedAttribute => match token {
-                    Token::Newline => {
-                        line += 1;
-                        LineStart
-                    }
-                    _ => return Err(ParseError::unexpected_token(line, token)),
-                },
+                    Token::Newline => LineStart,
+                    _ => panic!("Unexpected token {:?}", token)
+                }
+
                 ExpectingTable => match token {
                     Token::Newline => {
-                        line += 1;
                         LineStart
                     }
                     Token::Identifier(ident) | Token::QuotedIdentifier(ident) => {
-                        self.schemas
-                            .last_mut()
-                            .ok_or_else(|| ParseError::missing_schema(line))?
-                            .tables
-                            .push(Table::new(ident));
+                        self
+                            .schemas.last_mut().expect("No schema to add table to")
+                            .tables.push(Table::new(ident));
 
                         CreatedTable
                     }
-                    _ => return Err(ParseError::unexpected_token(line, token)),
-                },
+
+                    _ => panic!("Unexpected token {:?}", token)
+                }
 
                 ExpectingRecord => match token {
                     Token::Newline => {
-                        line += 1;
                         LineStart
                     }
                     Token::Identifier(_) | Token::Underscore => {
                         let name = match token {
                             Token::Identifier(ident) => Some(ident),
                             Token::Underscore => None,
-                            _ => unreachable!(),
+                            _ => unreachable!()
                         };
 
-                        self.schemas
-                            .last_mut()
-                            // It shouldn't actually be possible to return this error here,
-                            // since `ExpectingRecord` will only be reached if the indentation
-                            // unit has already been set, meaning a line containing a table has
-                            // to have already been successfully parsed, meaning a schema should
-                            // have to be present.
-                            .ok_or_else(|| ParseError::missing_schema(line))?
-                            .tables
-                            .last_mut()
-                            .ok_or_else(|| ParseError::missing_table(line))?
-                            .records
-                            .push(Record::new(name));
+                        self
+                            .schemas.last_mut().expect("No schema to find table in")
+                            .tables.last_mut().expect("No table to add record to")
+                            .records.push(Record::new(name));
 
                         CreatedRecord
                     }
-                    _ => return Err(ParseError::unexpected_token(line, token)),
-                },
+                    _ => panic!("Unexpected token {:?}", token)
+                }
 
                 ExpectingColumn => match token {
                     Token::Newline => {
-                        line += 1;
                         LineStart
                     }
                     Token::Identifier(ident) | Token::QuotedIdentifier(ident) => {
                         ExpectingValue(ident)
                     }
-                    _ => return Err(ParseError::unexpected_token(line, token)),
-                },
+                    _ => panic!("Unexpected token {:?}", token)
+                }
 
                 ExpectingValue(column) => match token {
                     Token::Boolean(_) | Token::Number(_) | Token::Text(_) => {
@@ -152,36 +133,28 @@ impl Parser {
                             Token::Boolean(b) => Value::Boolean(b),
                             Token::Number(b) => Value::Number(b),
                             Token::Text(b) => Value::Text(b),
-                            _ => unreachable!(),
+                            _ => unreachable!()
                         };
 
-                        self.schemas
-                            .last_mut()
-                            .ok_or_else(|| ParseError::missing_schema(line))? // Should never return error
-                            .tables
-                            .last_mut()
-                            .ok_or_else(|| ParseError::missing_table(line))? // Should never return error
-                            .records
-                            .last_mut()
-                            .ok_or_else(|| ParseError::missing_record(line))?
-                            .attributes
-                            .push(Attribute {
-                                name: column,
-                                value,
-                            });
+                        self
+                            .schemas.last_mut().expect("No schema to find table in")
+                            .tables.last_mut().expect("No table to find record in")
+                            .records.last_mut().expect("No record to add attribute to")
+                            .attributes.push(Attribute { name: column, value });
 
                         CreatedAttribute
                     }
-                    _ => return Err(ParseError::missing_column_value(line)),
-                },
+                    _ => panic!("Expected value for attribute")
+                }
             }
         }
 
-        if let ExpectingValue(_) = &self.state {
-            return Err(ParseError::missing_column_value(line));
+        match self.state {
+            ExpectingValue(_) => panic!("Expected value for attribute"),
+            _ => {}
         }
 
-        Ok(self)
+        self
     }
 }
 
@@ -194,7 +167,7 @@ fn indent_level(unit: &str, indent: &str) -> Option<usize> {
     let parts: Vec<&str> = indent.split(unit).collect();
 
     for p in &parts {
-        if !p.is_empty() {
+        if p.len() > 0 {
             return None;
         }
     }
@@ -253,9 +226,9 @@ mod tests {
             assert_valid(&spaces(2), &spaces(4), 2);
             assert_valid(&spaces(2), &spaces(6), 3);
 
-            assert_valid(&spaces(4), &spaces(0), 0);
-            assert_valid(&spaces(4), &spaces(4), 1);
-            assert_valid(&spaces(4), &spaces(8), 2);
+            assert_valid(&spaces(4), &spaces(0),  0);
+            assert_valid(&spaces(4), &spaces(4),  1);
+            assert_valid(&spaces(4), &spaces(8),  2);
             assert_valid(&spaces(4), &spaces(12), 3);
 
             assert_valid(&tabs(1), &tabs(0), 0);
