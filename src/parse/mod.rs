@@ -8,8 +8,8 @@ use parser::Parser;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ReferenceValue {
-    pub schema: String,
-    pub table: String,
+    pub schema: Option<String>,
+    pub table: Option<String>,
     pub record: String,
     pub column: String,
 }
@@ -655,8 +655,8 @@ mod tests {
                         attributes: vec![Attribute {
                             name: "column1".to_owned(),
                             value: Value::Reference(Box::new(ReferenceValue {
-                                schema: "schema".to_owned(),
-                                table: "table".to_owned(),
+                                schema: Some("schema".to_owned()),
+                                table: Some("table".to_owned()),
                                 record: "record".to_owned(),
                                 column: "column2".to_owned(),
                             })),
@@ -698,8 +698,8 @@ mod tests {
                         attributes: vec![Attribute {
                             name: "column1".to_owned(),
                             value: Value::Reference(Box::new(ReferenceValue {
-                                schema: "schema".to_owned(),
-                                table: "table".to_owned(),
+                                schema: Some("schema".to_owned()),
+                                table: Some("table".to_owned()),
                                 record: "record".to_owned(),
                                 column: "column2".to_owned(),
                             })),
@@ -730,8 +730,8 @@ mod tests {
                         attributes: vec![Attribute {
                             name: "column1".to_owned(),
                             value: Value::Reference(Box::new(ReferenceValue {
-                                schema: "public".to_owned(),
-                                table: "table".to_owned(),
+                                schema: Some("public".to_owned()),
+                                table: Some("table".to_owned()),
                                 record: "record".to_owned(),
                                 column: "column2".to_owned(),
                             })),
@@ -771,8 +771,8 @@ mod tests {
                         attributes: vec![Attribute {
                             name: "column1".to_owned(),
                             value: Value::Reference(Box::new(ReferenceValue {
-                                schema: "public".to_owned(),
-                                table: "table".to_owned(),
+                                schema: Some("public".to_owned()),
+                                table: Some("table".to_owned()),
                                 record: "record".to_owned(),
                                 column: "column2".to_owned(),
                             })),
@@ -803,8 +803,8 @@ mod tests {
                         attributes: vec![Attribute {
                             name: "column1".to_owned(),
                             value: Value::Reference(Box::new(ReferenceValue {
-                                schema: "public".to_owned(),
-                                table: "person".to_owned(),
+                                schema: Some("public".to_owned()),
+                                table: Some("person".to_owned()),
                                 record: "record".to_owned(),
                                 column: "column2".to_owned(),
                             })),
@@ -843,8 +843,8 @@ mod tests {
                         attributes: vec![Attribute {
                             name: "column1".to_owned(),
                             value: Value::Reference(Box::new(ReferenceValue {
-                                schema: "public".to_owned(),
-                                table: "person".to_owned(),
+                                schema: Some("public".to_owned()),
+                                table: Some("person".to_owned()),
                                 record: "record".to_owned(),
                                 column: "column2".to_owned(),
                             })),

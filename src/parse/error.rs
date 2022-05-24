@@ -4,7 +4,7 @@ use super::Token;
 
 #[derive(Debug, PartialEq)]
 pub enum ParseErrorKind {
-    IncompleteReference(String),
+    IncompleteReference,
     InconsistentIndent { unit: String, received: String },
     MissingColumnValue,
     MissingRecord,
@@ -40,9 +40,9 @@ impl ParseError {
         }
     }
 
-    pub fn incomplete_reference(line: usize, reference: String) -> Self {
+    pub fn incomplete_reference(line: usize) -> Self {
         Self {
-            kind: ParseErrorKind::IncompleteReference(reference),
+            kind: ParseErrorKind::IncompleteReference,
             line,
         }
     }
@@ -109,8 +109,8 @@ impl fmt::Display for ParseError {
 
         match &self.kind {
             EmptyIndent => write!(f, "Empty indent on line {}", self.line,),
-            IncompleteReference(reference) => {
-                write!(f, "Incomplete reference '{}' on line {}", reference, self.line)
+            IncompleteReference => {
+                write!(f, "Incomplete reference on line {}", self.line)
             }
             InconsistentIndent { unit, received } => write!(
                 f,

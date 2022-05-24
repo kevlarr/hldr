@@ -11,34 +11,43 @@ pub enum State {
     ExpectingRecord,
     ExpectingColumn,
     ExpectingValue(String),
-    IdentifierExpectingReferenceValue {
+
+    // An identifier has followed a value, so it expects either a
+    // fully-qualified or table-qualified reference value
+    ExpectingReferenceValue {
         column: String,
         identifier: String,
     },
-    SchemaQualifiedReferenceValueExpectingTable {
+
+    // A fully schema-qualified reference value is expected at this point
+    ReferenceValueExpectingTable {
         column: String,
         schema: String,
     },
-    SchemaQualifiedReferenceValueExpectingAtSign {
+
+    ReferenceValueExpectingAtSign {
         column: String,
         schema: String,
         table: String,
     },
-    SchemaQualifiedReferenceValueExpectingRecord {
+
+    // Either a qualified or unqualified reference has been identified
+    // at this point, including the '@' sign
+    ReferenceValueExpectingRecord {
         column: String,
-        schema: String,
-        table: String,
+        schema: Option<String>,
+        table: Option<String>,
     },
-    SchemaQualifiedReferenceValueExpectingRecordPeriod {
+    ReferenceValueExpectingRecordPeriod {
         column: String,
-        schema: String,
-        table: String,
+        schema: Option<String>,
+        table: Option<String>,
         record: String,
     },
-    SchemaQualifiedReferenceValueExpectingColumn {
+    ReferenceValueExpectingColumn {
         column: String,
-        schema: String,
-        table: String,
+        schema: Option<String>,
+        table: Option<String>,
         record: String,
     },
 }
@@ -203,45 +212,31 @@ impl Parser {
                         CreatedAttribute
                     }
                     Token::Identifier(i) | Token::QuotedIdentifier(i) => {
-                        IdentifierExpectingReferenceValue {
+                        ExpectingReferenceValue {
                             column,
                             identifier: i,
                         }
                     }
                     Token::AtSign => {
-                        let schema = self.schemas
-                            .last_mut()
-                            .ok_or_else(|| ParseError::missing_schema(line))?; // Should never return error
-
-                        let table = schema.tables
-                            .last_mut()
-                            .ok_or_else(|| ParseError::missing_table(line))?; // Should never return error
-
-                        SchemaQualifiedReferenceValueExpectingRecord {
+                        ReferenceValueExpectingRecord {
                             column,
-                            schema: schema.name.clone(),
-                            table: table.name.clone(),
-
+                            schema: None,
+                            table: None,
                         }
                     }
                     _ => return Err(ParseError::missing_column_value(line)),
                 },
 
-                IdentifierExpectingReferenceValue { column, identifier } => match token {
+                ExpectingReferenceValue { column, identifier } => match token {
                     Token::AtSign => {
-                        let schema = self.schemas
-                            .last_mut()
-                            .ok_or_else(|| ParseError::missing_schema(line))? // Should never return error
-                            .name.clone();
-
-                        SchemaQualifiedReferenceValueExpectingRecord {
+                        ReferenceValueExpectingRecord {
                             column,
-                            schema,
-                            table: identifier,
+                            schema: None,
+                            table: Some(identifier),
 
                         }
                     },
-                    Token::Period => SchemaQualifiedReferenceValueExpectingTable {
+                    Token::Period => ReferenceValueExpectingTable {
                         column,
                         schema: identifier,
                     },
@@ -251,69 +246,57 @@ impl Parser {
                     _ => return Err(ParseError::unexpected_token(line, token)),
                 },
 
-                SchemaQualifiedReferenceValueExpectingTable { column, schema } => match token {
+                ReferenceValueExpectingTable { column, schema } => match token {
                     Token::Identifier(i) | Token::QuotedIdentifier(i) => {
-                        SchemaQualifiedReferenceValueExpectingAtSign {
+                        ReferenceValueExpectingAtSign {
                             column,
                             schema,
                             table: i,
                         }
                     },
-                    Token::Newline => return Err(ParseError::incomplete_reference(
-                        line,
-                        format!("{}.", schema),
-                    )),
+                    Token::Newline => return Err(ParseError::incomplete_reference(line)),
                     _ => return Err(ParseError::unexpected_token(line, token)),
                 },
 
-                SchemaQualifiedReferenceValueExpectingAtSign { column, schema, table } => match token {
+                ReferenceValueExpectingAtSign { column, schema, table } => match token {
                     Token::AtSign => {
-                        SchemaQualifiedReferenceValueExpectingRecord {
+                        ReferenceValueExpectingRecord {
                             column,
-                            schema,
-                            table,
+                            schema: Some(schema),
+                            table: Some(table),
                         }
                     },
-                    Token::Newline => return Err(ParseError::incomplete_reference(
-                        line,
-                        format!("{}.{}", schema, table),
-                    )),
+                    Token::Newline => return Err(ParseError::incomplete_reference(line)),
                     _ => return Err(ParseError::unexpected_token(line, token)),
                 },
 
-                SchemaQualifiedReferenceValueExpectingRecord { column, schema, table } => match token {
+                ReferenceValueExpectingRecord { column, schema, table } => match token {
                     Token::Identifier(i) | Token::QuotedIdentifier(i) => {
-                        SchemaQualifiedReferenceValueExpectingRecordPeriod {
+                        ReferenceValueExpectingRecordPeriod {
                             column,
                             schema,
                             table,
                             record: i,
                         }
                     },
-                    Token::Newline => return Err(ParseError::incomplete_reference(
-                        line,
-                        format!("{}.{}@", schema, table),
-                    )),
+                    Token::Newline => return Err(ParseError::incomplete_reference(line)),
                     _ => return Err(ParseError::unexpected_token(line, token)),
                 },
 
-                SchemaQualifiedReferenceValueExpectingRecordPeriod { column, schema, table, record } => match token {
+                ReferenceValueExpectingRecordPeriod { column, schema, table, record } => match token {
                     Token::Period => {
-                        SchemaQualifiedReferenceValueExpectingColumn {
+                        ReferenceValueExpectingColumn {
                             column,
                             schema,
                             table,
                             record,
                         }
                     },
-                    Token::Newline => return Err(ParseError::incomplete_reference(
-                        line,
-                        format!("{}.{}@{}", schema, table, record),
-                    )),
+                    Token::Newline => return Err(ParseError::incomplete_reference(line)),
                     _ => return Err(ParseError::unexpected_token(line, token)),
                 },
 
-                SchemaQualifiedReferenceValueExpectingColumn { column, schema, table, record } => match token {
+                ReferenceValueExpectingColumn { column, schema, table, record } => match token {
                     Token::Identifier(i) | Token::QuotedIdentifier(i) => {
                         let value = Value::Reference(Box::new(ReferenceValue {
                             schema,
@@ -339,10 +322,7 @@ impl Parser {
 
                         CreatedAttribute
                     },
-                    Token::Newline => return Err(ParseError::incomplete_reference(
-                        line,
-                        format!("{}.{}@{}.", schema, table, record),
-                    )),
+                    Token::Newline => return Err(ParseError::incomplete_reference(line)),
                     _ => return Err(ParseError::unexpected_token(line, token)),
                 },
             };
